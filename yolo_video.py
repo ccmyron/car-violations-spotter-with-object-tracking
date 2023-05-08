@@ -48,6 +48,7 @@ end_line_right_track = [int(i * RESOLUTION_COEFFICIENT) for i in [930, 549, 1160
 color_map = {}
 tracker_lines = []
 cars_crossing = {}
+cars_coordinates = {}
 
 frame_counter = 0
 
@@ -99,16 +100,24 @@ while cap.isOpened():
     fps = str(int(fps))
     cv2.putText(show_frame, fps, (4, 35), cv2.FONT_HERSHEY_SIMPLEX, 1, (100, 255, 0), 3, cv2.LINE_AA)
 
-    # print ids
+    # tracing
     results_tracker = tracker.update(detections)
     for result in results_tracker:
         x1, y1, x2, y2, vehicle_id = result
         # convert the coordinates to int
-        x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+        x1, y1, x2, y2, vehicle_id = int(x1), int(y1), int(x2), int(y2), int(vehicle_id)
         # calculate the width and height of the boxes
         w, h = x2 - x1, y2 - y1
         # find the center coordinates of the boxes
         cx, cy = x1 + w // 2, y1 + h // 2
+
+        # add the path to a list
+        if vehicle_id not in cars_coordinates:
+            # init the id in the dict with the format {id: (timestamp, [center1, center2...])},
+            # center = tuple of center coordinates, for example (505, 101)
+            cars_coordinates[vehicle_id] = (frame_counter, [(cx, cy)])
+        else:
+            cars_coordinates[vehicle_id][1].append((cx, cy))
 
         # get color from the map, or generate new one if the id is not present
         if vehicle_id not in color_map:
@@ -116,7 +125,7 @@ while cap.isOpened():
 
         tracker_lines.append(((cx, cy), vehicle_id, frame_counter))
         cvzone.cornerRect(show_frame, (x1, y1, w, h), l=8, rt=1, colorR=(255, 0, 255))
-        cvzone.putTextRect(show_frame, f'{int(vehicle_id)}', (max(0, x1), max(35, y1)),
+        cvzone.putTextRect(show_frame, f'{vehicle_id}', (max(0, x1), max(35, y1)),
                            scale=1, thickness=2, offset=5)
 
         # if the car crossed the upper left line
@@ -151,16 +160,31 @@ while cap.isOpened():
             elif 'NE' not in [pair[0] for pair in cars_crossing[vehicle_id]]:
                 cars_crossing[vehicle_id].append(('NE', frame_counter))
 
-    print(cars_crossing)
+    # print(cars_crossing)
+    print(frame_counter)
+    print(cars_coordinates)
 
     # check for speed in cars and remove cars that only got one gateway
     copy_cars_crossing = cars_crossing.copy()
     for k, v in copy_cars_crossing.items():
         if len(v) == 2:
-            print(f'car with id: {int(k)} crossed the lines in {v[1][1] - v[0][1]} frames')
+            frames = v[1][1] - v[0][1]
+            print(f'car with id: {k} crossed the lines in {frames} frames')
+            if frames < 40:
+                print(f'car with id: {k} is speeding')
+            if v[0][0] not in ['NW', 'SE']:
+                print(f'car with id: {k} is heading in the wrong direction')
             del cars_crossing[k]
-        elif frame_counter > v[0][1] + 100:
+        elif frame_counter > v[0][1] + 200:
             del cars_crossing[k]
+
+    # remove the car from the dict if the timestamp is too old
+    copy_cars_coordinates = cars_coordinates.copy()
+    for k, v in copy_cars_coordinates.items():
+        if v[0] + 150 < frame_counter:
+            with open('cars_paths.txt', 'a') as f:
+                f.write(f'{k}: {v}\n')
+            del cars_coordinates[k]
 
     # tracker trails logic
     for tracker_line in tracker_lines:
