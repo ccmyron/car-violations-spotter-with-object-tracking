@@ -50,17 +50,26 @@ frame_counter = 0
 
 # cap = cv2.VideoCapture("https://func-streaming.azurewebsites.net/api/PlaylistFunction?"
 #                        "code=u04eWVJBPHqaSjRUp2gGUL67JbyKqJp-HzczMR3B11HuAzFu98ooYw==&clientId=default")
-cap = cv2.VideoCapture('content/ismail_fullhd.MOV')
+cap = cv2.VideoCapture('content/wrong-way-violation-with-filters.mp4')
 
 # define the resolution
 new_width = int(int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) * RESOLUTION_COEFFICIENT)
 new_height = int(int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) * RESOLUTION_COEFFICIENT)
 
 # load the mask
-mask = cv2.imread('assets/mask_ismail_prerecorded.png')
+mask = cv2.imread('assets/mask-for-wrong-way-violation1.png')
 mask = cv2.resize(mask, (new_width, new_height))
 
 SHIFT_Y = 288
+
+width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+fps = cap.get(cv2.CAP_PROP_FPS)
+total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+output_file = "output-content/filtered_video.mp4"
+fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+out = cv2.VideoWriter(output_file, fourcc, fps, (new_width, new_height))
 
 while cap.isOpened():
     ret, work_frame = cap.read()
@@ -99,12 +108,12 @@ while cap.isOpened():
                 current_array = np.array([x1, y1, x2, y2, conf])
                 detections = np.vstack((detections, current_array))
 
-    # show fps
-    new_frame_time = time.time()
-    fps = 1 / (new_frame_time - prev_frame_time)
-    prev_frame_time = new_frame_time
-    fps = str(int(fps))
-    cv2.putText(show_frame, fps, (4, 35), cv2.FONT_HERSHEY_SIMPLEX, 1, (100, 255, 0), 3, cv2.LINE_AA)
+    # # show fps
+    # new_frame_time = time.time()
+    # fps = 1 / (new_frame_time - prev_frame_time)
+    # prev_frame_time = new_frame_time
+    # fps = str(int(fps))
+    # cv2.putText(show_frame, fps, (4, 35), cv2.FONT_HERSHEY_SIMPLEX, 1, (100, 255, 0), 3, cv2.LINE_AA)
 
     # tracing
     results_tracker = tracker.update(detections)
@@ -131,8 +140,8 @@ while cap.isOpened():
 
         tracker_lines.append(((cx, cy), vehicle_id, frame_counter))
         cvzone.cornerRect(show_frame, (x1, y1, w, h), l=8, rt=1, colorR=(255, 0, 255))
-        cvzone.putTextRect(show_frame, f'{vehicle_id}', (max(0, x1), max(35, y1)),
-                           scale=1, thickness=2, offset=5)
+        # cvzone.putTextRect(show_frame, f'{vehicle_id}', (max(0, x1), max(35, y1)),
+        #                    scale=1, thickness=2, offset=5)
 
         # if the car crossed the upper left line
         if start_line_left_track[0] < cx < start_line_left_track[2] and \
@@ -192,19 +201,19 @@ while cap.isOpened():
                 f.write(f'{k}: {v}\n')
             del cars_coordinates[k]
 
-    # tracker trails logic
-    for tracker_line in tracker_lines:
-        if tracker_line[2] + FRAMES_PER_SECOND * 2 < frame_counter:
-            tracker_lines.remove(tracker_line)
-            continue
-
-        cv2.circle(
-            show_frame,
-            tracker_line[0],
-            utils.map_value(frame_counter - tracker_line[2], 0, FRAMES_PER_SECOND * 2, 5, 0),
-            color_map[tracker_line[1]],
-            cv2.FILLED
-        )
+    # # tracker trails logic
+    # for tracker_line in tracker_lines:
+    #     if tracker_line[2] + FRAMES_PER_SECOND * 2 < frame_counter:
+    #         tracker_lines.remove(tracker_line)
+    #         continue
+    #
+    #     cv2.circle(
+    #         show_frame,
+    #         tracker_line[0],
+    #         utils.map_value(frame_counter - tracker_line[2], 0, FRAMES_PER_SECOND * 2, 5, 0),
+    #         color_map[tracker_line[1]],
+    #         cv2.FILLED
+    #     )
     frame_counter += 1
 
     # draw start and end lines for speed check
@@ -243,6 +252,6 @@ while cap.isOpened():
     #     (0, 255, 255),
     #     3
     # )
-
+    out.write(show_frame)
     cv2.imshow("", show_frame)
     cv2.waitKey(1)
